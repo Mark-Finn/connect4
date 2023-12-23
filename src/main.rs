@@ -1,42 +1,35 @@
-macro_rules! create_function {
-    // This macro takes an argument of designator `ident` and
-    // creates a function named `$func_name`.
-    // The `ident` designator is used for variable/function names.
-    ($func_name:ident) => {
-        fn $func_name() {
-            // The `stringify!` macro converts an `ident` into a string.
-            println!("You called {:?}()",
-                     stringify!($func_name));
-        }
-    };
-}
-
-// Create functions named `foo` and `bar` with the above macro.
-create_function!(foo);
-create_function!(bar);
-
-macro_rules! print_result {
-    // This macro takes an expression of type `expr` and prints
-    // it as a string along with its result.
-    // The `expr` designator is used for expressions.
-    ($expression:expr) => {
-        // `stringify!` will convert the expression *as it is* into a string.
-        println!("{:?} = {:?}",
-                 stringify!($expression),
-                 $expression);
-    };
-}
+use std::fs::File;
+use std::io::Write;
+use connect4::opening_book::Explorer;
+use connect4::{position_factory, reader};
+use connect4::solver::Solver;
 
 fn main() {
-    foo();
-    bar();
+    create_position(9);
+    work(9);
+}
 
-    print_result!(1u32 + 1);
+fn create_position(depth: u8) {
+    let position = position_factory::create("").unwrap();
+    let mut explorer = Explorer::new();
+    explorer.explore(position, String::new(), depth);
 
-    // Recall that blocks are expressions too!
-    print_result!({
-        let x = 1u32;
+    explorer.output.reverse();
+    let filepath = format!("./data/{}_positions_rev", depth);
+    let mut file = File::create(filepath.as_str()).unwrap();
+    file.write_all(explorer.output.join("\n").as_bytes()).unwrap();
+}
 
-        x * x + 2 * x - 1
-    });
+fn work(depth: u8) {
+    let mut solver = Solver::new(None);
+
+    let read_filepath = format!("./data/{}_positions_rev", depth);
+    let write_filepath = format!("./data/{}_positions_rev_solved", depth);
+    let mut file = File::create(write_filepath.as_str()).unwrap();
+    for line_result in reader::read_positions(read_filepath.as_str()) {
+        let line = line_result.unwrap();
+        let position = position_factory::create(line.as_str()).unwrap();
+        let score = solver.solve(position);
+        file.write_all(format!("{} {}\n", line, score).as_bytes()).unwrap();
+    }
 }
