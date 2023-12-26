@@ -1,9 +1,44 @@
 use std::collections::HashSet;
+use std::fs;
+use std::io::Write;
+use bincode::config;
+use bincode::config::Configuration;
 use crate::position::{Position, WIDTH};
+use crate::transposition_table::TranspositionTable;
+
+const FILEPATH: &str = "./data/opening_book";
 
 pub struct Explorer {
     visited: HashSet<u64>,
     pub output: Vec<String>,
+}
+
+pub fn get_opening_book() -> TranspositionTable {
+    return match &fs::read(FILEPATH) {
+        Ok(encoded) => {
+            match bincode::decode_from_slice(&encoded[..], bincode_config()) {
+                Ok((transposition_table, _)) => {
+                    transposition_table
+                },
+                Err(_) => TranspositionTable::new(),
+            }
+        }
+        Err(_) => TranspositionTable::new(),
+    };
+}
+
+pub fn save_opening_book(opening_book: TranspositionTable) -> std::io::Result<()> {
+    let encoded: Vec<u8> = bincode::encode_to_vec(opening_book, bincode_config()).unwrap();
+
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(FILEPATH)?;
+    file.write_all(&*encoded)
+}
+
+fn bincode_config() -> Configuration {
+    config::standard()
 }
 
 impl Explorer {

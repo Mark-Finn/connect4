@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use crate::opening_book::{get_opening_book, save_opening_book};
 use crate::transposition_table::TranspositionTable;
 use crate::position::{Position, BOARD_SIZE, WIDTH, MAX_SCORE, MIN_SCORE};
 
@@ -16,6 +17,7 @@ impl SolverOptions {
 
 pub struct Solver {
     options: SolverOptions,
+    opening_book: TranspositionTable,
     transposition_table: TranspositionTable,
     node_count: u64,
 }
@@ -24,9 +26,14 @@ impl Solver {
     pub fn new(options: Option<SolverOptions>) -> Self {
         Self {
             options: options.unwrap_or(SolverOptions::new()),
+            opening_book: get_opening_book(),
             transposition_table: TranspositionTable::new(),
             node_count: 0,
         }
+    }
+
+    pub fn save(self) -> std::io::Result<()> {
+        save_opening_book(self.opening_book)
     }
 
     pub fn solve(&mut self, position: impl Position) -> i8 {
@@ -66,7 +73,7 @@ impl Solver {
         }
     }
 
-    pub fn analyze(&mut self, position: impl Position, weak: bool) -> Vec<Option<i8>> {
+    pub fn analyze(&mut self, position: impl Position) -> Vec<Option<i8>> {
         (0..WIDTH)
             .map(|col| {
                 if !position.can_play(col) {
@@ -84,8 +91,13 @@ impl Solver {
             .collect()
     }
 
-    pub fn save(&self) -> std::io::Result<()> {
-        self.transposition_table.save()
+    pub fn best_move(&mut self, position: impl Position) -> Option<usize> {
+        self.analyze(position)
+            .into_iter()
+            .map(|col| col.unwrap_or(-1))
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.cmp(b))
+            .map(|(index, _)| index)
     }
 
     fn negamax(&mut self, position: impl Position, mut alpha: i8, mut beta: i8) -> i8 {
@@ -102,9 +114,13 @@ impl Solver {
             return 0;
         }
 
+        let key = position.symmetric_key();
+        if let Some(val) = self.opening_book.get(key) {
+            return val;
+        }
+
         let mut min: i8 = position.next_min_possible_score();
         let mut max: i8 = position.next_max_possible_score();
-        let key = position.symmetric_key();
         match self.transposition_table.get(key) {
             Some(val) => {
                 if val > MAX_SCORE - MIN_SCORE + 1 {
