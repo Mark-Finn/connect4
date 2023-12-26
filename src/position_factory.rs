@@ -13,24 +13,25 @@ pub fn create(s: &str) -> Result<impl Position, String> {
             let mut mask: u64 = 0;
             let mut move_count: u8 = 0;
             let mut player_moves: u8 = 0;
+            let mut index: u8 = 0;
             while let Some(c) = chars.next() {
-                if c == '0' {
+                if c != '0' {
                     move_count += 1;
-                    continue;
-                }
-                let row = (HEIGHT - 1) - (move_count / WIDTH);
-                let col = move_count % WIDTH;
-                let value = 1 << (WIDTH * col + row);
-                move_count += 1;
 
-                mask |= value;
-                if c == player_up_next {
-                    position |= value;
-                    player_moves += 1;
+                    let row = (HEIGHT - 1) - (index / WIDTH);
+                    let col = index % WIDTH;
+                    let value = 1 << (WIDTH * col + row);
+
+                    mask |= value;
+                    if c == player_up_next {
+                        position |= value;
+                        player_moves += 1;
+                    }
                 }
+                index += 1;
             }
 
-            if move_count / 2 == player_moves {
+            if move_count / 2  == player_moves {
                 Ok(BitBoard { position, mask, move_count })
             } else {
                 Err("One player has made at least one extra move".to_string())

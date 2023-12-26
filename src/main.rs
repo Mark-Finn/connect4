@@ -23,8 +23,13 @@ fn main() {
         "utilization" => opening_book_utilization(),
         "best_move" => best_move(args[2].as_str()),
         "analyze" => analyze(args[2].as_str()),
+        "stringify" => stringify(args[2].as_str()),
         _ => println!("Command Not Recognized"),
     }
+}
+
+fn stringify(position_str: &str) {
+    println!("{}", position_factory::create(position_str).unwrap().stringify());
 }
 
 fn analyze(position_str: &str) {
