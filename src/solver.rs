@@ -94,7 +94,7 @@ impl Solver {
     pub fn best_move(&mut self, position: impl Position) -> Option<usize> {
         self.analyze(position)
             .into_iter()
-            .map(|col| col.unwrap_or(-1))
+            .map(|col| col.unwrap_or(i8::MIN))
             .enumerate()
             .max_by(|(_, a), (_, b)| a.cmp(b))
             .map(|(index, _)| index)
