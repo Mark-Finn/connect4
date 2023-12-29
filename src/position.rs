@@ -1,9 +1,13 @@
+// For custom board sizes, change WIDTH and HEIGHT.
+// if WIDTH * (HEIGHT + 1) > 64, then increase BoardType to u128
+// transposition_table might need it's SIZE const changed. Validity is checked during unoptimized build's runtime
+pub type BoardType = u64;
 pub const WIDTH: u8 = 7;
 pub const HEIGHT: u8 = 6;
 
 pub const BOARD_SIZE: u8 = WIDTH * HEIGHT;
-
 pub const MIN_SCORE: i8 = -1 * (BOARD_SIZE / 2 + 3) as i8;
+
 pub const MAX_SCORE: i8 = ((BOARD_SIZE + 1) / 2 - 3) as i8;
 
 pub trait Position: Clone {
@@ -19,9 +23,9 @@ pub trait Position: Clone {
 
     fn can_win_next_move(&self) -> bool;
 
-    fn key(&self) -> u64;
+    fn key(&self) -> BoardType;
 
-    fn symmetric_key(&self) -> u64;
+    fn symmetric_key(&self) -> BoardType;
 
     fn stringify(&self) -> String;
 

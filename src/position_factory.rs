@@ -1,9 +1,11 @@
 use crate::bit_board::BitBoard;
-use crate::position::{Position, HEIGHT, WIDTH};
+use crate::position::{Position, HEIGHT, WIDTH, BOARD_SIZE};
+
+const BOARD_SIZE_PLUS_ONE: u8 = BOARD_SIZE + 1;
 
 pub fn create(s: &str) -> Result<impl Position, String> {
-    match s.len() {
-        43 => {
+    match s.len() as u8 {
+        BOARD_SIZE_PLUS_ONE => {
             let mut chars = s.chars().fuse();
             let player_up_next = chars.next().unwrap();
             if !matches!(player_up_next, '1' | '2') {
@@ -37,7 +39,7 @@ pub fn create(s: &str) -> Result<impl Position, String> {
                 Err("One player has made at least one extra move".to_string())
             }
         },
-        43.. => Err("'value' is too long to parse!".to_string()),
+        BOARD_SIZE_PLUS_ONE.. => Err("'value' is too long to parse!".to_string()),
         _ => {
             let mut bit_board = BitBoard::new();
             for c in s.chars() {

@@ -1,5 +1,5 @@
 use std::cmp::min;
-use crate::position::{Position, BOARD_SIZE, HEIGHT, WIDTH};
+use crate::position::{Position, BOARD_SIZE, HEIGHT, WIDTH, BoardType};
 
 // position/mask are 49-bit representations of the board
 // position:
@@ -9,8 +9,8 @@ use crate::position::{Position, BOARD_SIZE, HEIGHT, WIDTH};
 //     empty spaces are '0's
 //     all pieces are '1's
 // the bottom left of the board is the first bit (0) and the top right is the final bit (48)
-// this means each stop up a column is equivalent to multiplying by two numerically
-// the top row is needed, but not part of a 7x6 game board
+// this means each step up a column is equivalent to multiplying by two numerically
+// the top row is needed, but not part of the game board
 //                              .  .  .  .  .  .  .
 //                              5 12 19 26 33 40 47
 //                              4 11 18 25 32 39 46
@@ -20,8 +20,8 @@ use crate::position::{Position, BOARD_SIZE, HEIGHT, WIDTH};
 //                              0  7 14 21 28 35 42
 #[derive(Clone)]
 pub struct BitBoard {
-    pub position: u64,
-    pub mask: u64,
+    pub position: BoardType,
+    pub mask: BoardType,
     pub move_count: u8,
 }
 
@@ -65,7 +65,7 @@ impl Position for BitBoard {
 
         (0..WIDTH)
             .filter(|col| (self.column_mask(*col) & non_losing_moves) > 0 && self.can_play(*col))
-            .map(|col| (col, Self::bit_count(Self::winning_positions(self.position_from_col(col), self.mask))))
+            .map(|col| (col, Self::winning_positions(self.position_from_col(col), self.mask).count_ones() as u8))
             .collect::<Vec<_>>()
     }
 
@@ -78,11 +78,11 @@ impl Position for BitBoard {
         return false;
     }
 
-    fn key(&self) -> u64 {
+    fn key(&self) -> BoardType {
         self.position + self.mask
     }
 
-    fn symmetric_key(&self) -> u64 {
+    fn symmetric_key(&self) -> BoardType {
         min(self.key(), self.reverse_key())
     }
 
@@ -92,16 +92,17 @@ impl Position for BitBoard {
 }
 
 impl BitBoard {
-    // todo make this based on WIDTH
-    const BOTTOM_MASK: u64 = (1 << 0)
-        + (1 << 7)
-        + (1 << 14)
-        + (1 << 21)
-        + (1 << 28)
-        + (1 << 35)
-        + (1 << 42);
+    const BOTTOM_MASK: BoardType = {
+        let mut bottom_mask = 0;
+        let mut col = 0;
+        while col < WIDTH {
+            bottom_mask += 1 << (col * (HEIGHT + 1));
+            col += 1;
+        }
+        bottom_mask
+    };
 
-    const BOARD_MASK: u64 = Self::BOTTOM_MASK * ((1 << HEIGHT) - 1);
+    const BOARD_MASK: BoardType = Self::BOTTOM_MASK * ((1 << HEIGHT) - 1);
 
     pub fn new() -> Self {
         BitBoard {
@@ -111,17 +112,17 @@ impl BitBoard {
         }
     }
 
-    fn possible(&self) -> u64 {
+    fn possible(&self) -> BoardType {
         (self.mask + Self::BOTTOM_MASK) & Self::BOARD_MASK
     }
 
-    fn column_mask(&self, col: u8) -> u64 {
+    fn column_mask(&self, col: u8) -> BoardType {
         ((1 << HEIGHT) - 1) << (col * (HEIGHT + 1))
     }
 
-    fn reverse_key(&self) -> u64 {
-        let mut position: u64 = 0;
-        let mut mask: u64 = 0;
+    fn reverse_key(&self) -> BoardType {
+        let mut position: BoardType = 0;
+        let mut mask: BoardType = 0;
         for col in (0..WIDTH).rev() {
             let column_mask = self.column_mask(col);
             let shift: i8 = (2 * (col as i8) - (WIDTH as i8 - 1)) * WIDTH as i8;
@@ -140,79 +141,84 @@ impl BitBoard {
         position + mask
     }
 
-    fn winning_positions(position: u64, mask: u64) -> u64 {
-        //vertical
-        let mut r = (position << 1) & (position << 2) & (position << 3);
-
-        //horizontal
-        let mut p = (position << (HEIGHT+1)) & (position << 2*(HEIGHT+1));
-        r |= p & (position << 3*(HEIGHT+1));
-        r |= p & (position >> (HEIGHT+1));
-        p >>= 3*(HEIGHT+1);
-        r |= p & (position << (HEIGHT+1));
-        r |= p & (position >> 3*(HEIGHT+1));
-
-        //diagonal 1
-        p = (position << HEIGHT) & (position << 2*HEIGHT);
-        r |= p & (position << 3*HEIGHT);
-        r |= p & (position >> HEIGHT);
-        p >>= 3*HEIGHT;
-        r |= p & (position << HEIGHT);
-        r |= p & (position >> 3*HEIGHT);
-
-        //diagonal 2
-        p = (position << (HEIGHT+2)) & (position << 2*(HEIGHT+2));
-        r |= p & (position << 3*(HEIGHT+2));
-        r |= p & (position >> (HEIGHT+2));
-        p >>= 3*(HEIGHT+2);
-        r |= p & (position << (HEIGHT+2));
-        r |= p & (position >> 3*(HEIGHT+2));
-
-        r & (Self::BOARD_MASK ^ mask)
+    fn winning_positions(position: BoardType, mask: BoardType) -> BoardType {
+        let all_winning_positions = Self::vertical_winning_positions(position)
+            | Self::horizontal_winning_positions(position)
+            | Self::positive_diagonal_winning_positions(position)
+            | Self::negative_diagonal_winning_positions(position);
+        all_winning_positions & (Self::BOARD_MASK ^ mask)
     }
 
-    fn position_from_col(&self, col: u8) -> u64 {
+    fn vertical_winning_positions(position: BoardType) -> BoardType {
+        (position << 1) & (position << 2) & (position << 3)
+    }
+
+    fn horizontal_winning_positions(position: BoardType) -> BoardType {
+        let x = HEIGHT + 1;
+        let x3 = x * 3;
+        let m = (position << x) & (position << 2 * x);
+        let n = m >> x3;
+        return m & (position << x3)
+            | m & (position >> x)
+            | n & (position << x)
+            | n & (position >> x3)
+    }
+
+    fn positive_diagonal_winning_positions(position: BoardType) -> BoardType {
+        let x = HEIGHT + 2;
+        let x3 = x * 3;
+        let m = (position << x) & (position << (2 * x));
+        let n = m >> x3;
+        return m & (position << x3)
+            | m & (position >> x)
+            | n & (position << x)
+            | n & (position >> x3)
+    }
+
+    fn negative_diagonal_winning_positions(position: BoardType) -> BoardType {
+        let x = HEIGHT;
+        let x3 = x * 3;
+        let m = (position << x) & (position << (2 * x));
+        let n = m >> x3;
+        return m & (position << x3)
+            | m & (position >> x)
+            | n & (position << x)
+            | n & (position >> x3)
+    }
+
+    fn position_from_col(&self, col: u8) -> BoardType {
         let flipped_position = self.position ^ self.mask;
         let new_mask = self.mask | (self.mask + Self::bottom_mask(col));
         flipped_position ^ new_mask
     }
 
-    // https://en.wikipedia.org/wiki/Hamming_weight
-    fn bit_count(mut n: u64) -> u8 {
-        n -= (n >> 1) & 0x5555555555555555;
-        n = (n & 0x3333333333333333) + ((n >> 2) & 0x3333333333333333);
-        n = (n + (n >> 4)) & 0xF0F0F0F0F0F0F0F;
-        ((n as u128 * 0x101010101010101) >> 56) as u8
-    }
-
-    fn bottom_mask(col: u8) -> u64 {
+    fn bottom_mask(col: u8) -> BoardType {
         1 << col*(HEIGHT + 1)
     }
 
-    fn top_mask(col: u8) -> u64 {
+    fn top_mask(col: u8) -> BoardType {
         (1 << (HEIGHT - 1)) << (col * (HEIGHT + 1))
     }
 
-    fn alignment_horizontal(position: u64) -> bool {
+    fn alignment_horizontal(position: BoardType) -> bool {
         let x = HEIGHT + 1;
         let m = position & (position >> x);
-        let _test = m & (m >> (2 * x));
         m & (m >> (2 * x)) > 0
     }
 
-    fn alignment_positive_diagonal(position: u64) -> bool {
+    fn alignment_positive_diagonal(position: BoardType) -> bool {
         let x = HEIGHT + 2;
         let m = position & (position >> x);
         m & (m >> (2 * x)) > 0
     }
 
-    fn alignment_negative_diagonal(position: u64) -> bool {
+    fn alignment_negative_diagonal(position: BoardType) -> bool {
         let x = HEIGHT;
         let m = position & (position >> x);
         m & (m >> (2 * x)) > 0
     }
 
-    fn alignment_vertical(position: u64) -> bool {
+    fn alignment_vertical(position: BoardType) -> bool {
         let x = 1;
         let m = position & (position >> x);
         m & (m >> (2 * x)) > 0
@@ -247,7 +253,7 @@ impl From<&BitBoard> for String {
     }
 }
 
-fn mask_stringify(func: impl Fn(u64) -> char) -> String {
+fn mask_stringify(func: impl Fn(BoardType) -> char) -> String {
     let mut s = String::with_capacity(((BOARD_SIZE * 2) + HEIGHT) as usize);
     for row in (0..HEIGHT).rev() {
         for col in 0..WIDTH {
@@ -261,7 +267,7 @@ fn mask_stringify(func: impl Fn(u64) -> char) -> String {
 
 // very useful for debugging
 #[allow(dead_code)]
-fn stringify_position(position: u64) -> String {
+fn stringify_position(position: BoardType) -> String {
     mask_stringify(|mask|
         if position & mask > 0 {
             '1'

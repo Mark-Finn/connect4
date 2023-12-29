@@ -3,17 +3,18 @@ use std::fs;
 use std::io::Write;
 use bincode::config;
 use bincode::config::Configuration;
-use crate::position::{Position, WIDTH};
+use crate::position::{Position, WIDTH, HEIGHT};
 use crate::transposition_table::TranspositionTable;
 
-const FILEPATH: &str = "./data/opening_book";
+const FILEPATH: &str = format!("./data/{}x{}_opening_book", WIDTH, HEIGHT).as_str();
 
 pub struct Explorer {
     visited: HashSet<u64>,
     pub output: Vec<String>,
 }
 
-pub fn get_opening_book() -> TranspositionTable {
+pub fn
+get_opening_book() -> TranspositionTable {
     return match &fs::read(FILEPATH) {
         Ok(encoded) => {
             match bincode::decode_from_slice(&encoded[..], bincode_config()) {

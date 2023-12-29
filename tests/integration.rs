@@ -1,7 +1,5 @@
 #[cfg(test)]
 mod integration {
-    use std::fs::{File};
-    use std::io::{BufRead, BufReader};
     use connect4::{position_factory, reader};
     use connect4::solver::{Solver, SolverOptions};
 
@@ -72,10 +70,10 @@ mod integration {
         for (moves, expected) in read_tests(filepath, limit, skip) {
             let position = position_factory::create(moves.as_str()).unwrap();
             let actual = solver.solve(position);
-            if !weak || expected == actual {
+            if !weak {
                 assert_eq!(expected, actual);
             } else {
-                assert_eq!(unit_value(expected), actual);
+                assert_eq!(unit_value(expected), unit_value(actual));
             }
         }
     }
